@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helmet Violation Detection</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Simple loading spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased">
+
+    <!-- Main Container -->
+    <div class="container mx-auto p-4 md:p-8 max-w-3xl">
+        
+        <!-- Header -->
+        <header class="bg-white shadow-md rounded-lg p-6 mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 text-center">
+                Helmet & Number Plate Detection
+            </h1>
+            <p class="text-gray-600 text-center mt-2">
+                Upload an image to detect helmet violations and extract number plates.
+            </p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="bg-white shadow-md rounded-lg p-6">
+            
+            <!-- Upload Form -->
+            <form id="uploadForm" class="space-y-4">
+                <div>
+                    <label for="fileInput" class="block text-sm font-medium text-gray-700 mb-2">
+                        Choose an image file:
+                    </label>
+                    <input type="file" id="fileInput" name="file" accept="image/png, image/jpeg"
+                           class="block w-full text-sm text-gray-500
+                                  file:mr-4 file:py-2 file:px-4
+                                  file:rounded-lg file:border-0
+                                  file:text-sm file:font-semibold
+                                  file:bg-blue-50 file:text-blue-700
+                                  hover:file:bg-blue-100 cursor-pointer"
+                           required>
+                </div>
+                
+                <button type="submit" id="submitButton"
+                        class="w-full flex justify-center items-center py-3 px-4 border border-transparent
+                               rounded-lg shadow-sm text-sm font-medium text-white
+                               bg-blue-600 hover:bg-blue-700
+                               focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+                               transition-colors">
+                    Detect Violations
+                </button>
+            </form>
+
+            <!-- Loading Spinner (Hidden by default) -->
+            <div id="loader" class="hidden flex justify-center items-center py-6">
+                <div class="loader"></div>
+                <p class="ml-4 text-gray-700">Analyzing image, please wait...</p>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="mt-6 space-y-4">
+                
+                <!-- Image Preview -->
+                <div id="imagePreviewContainer" class="hidden border-2 border-dashed border-gray-300 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Image Preview:</h3>
+                    <img id="imagePreview" src="#" alt="Image preview" class="max-w-full h-auto rounded-md mx-auto">
+                </div>
+
+                <!-- Detection Results -->
+                <div id="detectionResultsContainer" class="hidden">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Detection Results:</h3>
+                    <div id="detectionResults" class="bg-gray-50 rounded-lg p-4">
+                        <!-- Results will be dynamically inserted here -->
+                    </div>
+                </div>
+
+            </div>
+
+        </main>
+
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const submitButton = document.getElementById('submitButton');
+        
+        // Result containers
+        const loader = document.getElementById('loader');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const detectionResultsContainer = document.getElementById('detectionResultsContainer');
+        const detectionResults = document.getElementById('detectionResults');
+
+        // Backend API URL
+        // Assumes the Flask server is running on the same machine on port 5000
+        const API_URL = 'http://127.0.0.1:8000/predict';
+
+        // Show image preview when a file is selected
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.src = e.target.result;
+                    imagePreviewContainer.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+                
+                // Clear old results
+                detectionResultsContainer.classList.add('hidden');
+                detectionResults.innerHTML = '';
+            }
+        });
+
+        // Handle form submission
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+            
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select an image file first.');
+                return;
+            }
+
+            // Prepare for API call
+            loader.classList.remove('hidden');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Analyzing...';
+            detectionResultsContainer.classList.add('hidden');
+            detectionResults.innerHTML = '';
+
+            // Create FormData object to send the file
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                // Send the image to the Flask backend
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+                }
+
+                // Parse the JSON response
+                const data = await response.json();
+                displayResults(data.plates);
+
+            } catch (error) {
+                console.error('Error during detection:', error);
+                displayError(error.message);
+            } finally {
+                // Clean up UI
+                loader.classList.add('hidden');
+                submitButton.disabled = false;
+                submitButton.textContent = 'Detect Violations';
+            }
+        });
+
+        function displayResults(plates) {
+            detectionResultsContainer.classList.remove('hidden');
+            
+            if (plates && plates.length > 0) {
+                // Violations found
+                let html = '<p class="text-red-700 font-semibold">Violations Detected! Extracted Number Plates:</p>';
+                html += '<ul class="list-disc list-inside mt-2 space-y-1">';
+                plates.forEach(plate => {
+                    html += `<li class="text-gray-800 font-mono text-lg">${plate}</li>`;
+                });
+                html += '</ul>';
+                detectionResults.innerHTML = html;
+            } else {
+                // No violations found
+                detectionResults.innerHTML = '<p class="text-green-700 font-semibold">No helmet violations associated with number plates were found.</p>';
+            }
+        }
+
+        function displayError(errorMessage) {
+            detectionResultsContainer.classList.remove('hidden');
+            detectionResults.innerHTML = `<p class="text-red-700 font-semibold">An Error Occurred:</p><p class="text-red-600 mt-1">${errorMessage}</p><p class="text-sm text-gray-500 mt-2">Please ensure the Python backend server ('app.py') is running and accessible at ${API_URL}.</p>`;
+        }
+
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+train: /Users/reventhe/Documents/Valise/helmet_detection_project/Dataset/images/train
+val: /Users/reventhe/Documents/Valise/helmet_detection_project/Dataset/images/val
+
+
+nc: 3
+names: ['No_Helmet', 'Number_Plate', 'helmet']
